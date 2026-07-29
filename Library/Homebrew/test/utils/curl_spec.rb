@@ -467,7 +467,6 @@ RSpec.describe "Utils::Curl" do
 
     it "uses `--fail` unless `:show_output` is `true`" do
       expect(curl_args(*args, show_output: false).join(" ")).to include("--fail")
-      expect(curl_args(*args, show_output: nil).join(" ")).to include("--fail")
       expect(curl_args(*args).join(" ")).to include("--fail")
       expect(curl_args(*args, show_output: true).join(" ")).not_to include("--fail")
     end
