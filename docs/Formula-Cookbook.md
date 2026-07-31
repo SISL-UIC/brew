@@ -1075,8 +1075,8 @@ class Foo < Formula
   url "https://example.com/foo-1.0.tar.gz"
 
   post_install_steps do
-    mkdir_p "log/foo"
-    touch "foo/state"
+    mkdir_p "log/foo", base: :var
+    touch "foo/state", base: :var
     mv "default.conf", "foo/default.conf"
     ln_s "cert.pem", "foo/cert.pem", source_base: :relative
   end
@@ -1091,31 +1091,31 @@ represented by structured steps.
 
 #### File preparation steps
 
-`mkdir`, `mkdir_p` and `touch` default to paths relative to `var`. Other file steps default their source and target paths to `prefix`. Use `base:`, `source_base:` or `target_base:` when a step needs another formula path such as `pkgetc`; use `source_base: :relative` for relative symlink sources.
+Specify `base:` for paths such as `var`, `etc` or `pkgetc`. File steps with separate source and target paths default those paths to `prefix`; use `source_base:` or `target_base:` to select another formula path and `source_base: :relative` for relative symlink sources.
 
-* `mkdir`: create one directory; example: `mkdir "log/foo"`.
-* `mkdir_p`: create a directory and any missing parents; example: `mkdir_p "log/foo"`.
-* `touch`: create or update a file timestamp; example: `touch "foo/state"`.
+* `mkdir`: create one directory; example: `mkdir "log/foo", base: :var`.
+* `mkdir_p`: create a directory and any missing parents; example: `mkdir_p "log/foo", base: :var`.
+* `touch`: create or update a file timestamp; example: `touch "foo/state", base: :var`.
 * `move`: move one file or directory; example: `move "default.conf", "foo/default.conf"`.
 * `mv`: alias for `move`; example: `mv "default.conf", "foo/default.conf"`.
 * `move_children`: move the contents of one directory into another; example: `move_children "defaults", "foo/defaults"`.
 * `copy`: copy a file or, with `recursive: true`, a directory; example: `copy "default.conf", "foo/default.conf"`.
-* `remove`: remove one or more paths; example: `remove ["old.conf", "foo/*.bak"]`. Use `recursive: true` for directories.
-* `inreplace`: replace text in a file; example: `inreplace "foo.conf", "@PREFIX@", "{{HOMEBREW_PREFIX}}"`. Pass a regular expression as `before` for pattern matching.
+* `remove`: remove one or more paths; example: `remove ["old.conf", "foo/*.bak"], base: :var`. Use `recursive: true` for directories.
+* `inreplace`: replace text in a file; example: `inreplace "foo.conf", "@PREFIX@", "{{HOMEBREW_PREFIX}}", base: :etc`. Pass a regular expression as `before` for pattern matching.
 * `symlink`: create a symlink; example: `symlink "cert.pem", "foo/cert.pem", source_base: :relative`.
 * `ln_s`: alias for `symlink`; example: `ln_s "cert.pem", "foo/cert.pem", source_base: :relative`.
 * `ln_sf`: create or replace a symlink; example: `ln_sf "cert.pem", "foo/cert.pem", source_base: :relative`.
-* `set_permissions`: change existing path permissions; example: `set_permissions "foo", "0755"`.
+* `set_permissions`: change existing path permissions; example: `set_permissions "foo", "0755", base: :var`.
 * `change_dylib_id`: change one Mach-O dynamic library ID; pass the complete source and new ID, use `resolve_source: true` for a source symlink and wrap the step in `on_macos`.
 
-Use `if_path_exists` and `unless_path_exists` blocks to guard one or more steps by a path, and `on_macos` and `on_linux` blocks for platform-specific steps. Each guard is evaluated once for its whole block. `copy`, `move` and symlink steps accept `source_glob: true`; path collections used by `remove` and `set_permissions` expand globs automatically. Removals may additionally be restricted with `symlink_target_contains:` or `content_contains:`.
+Use `if_path_exists` and `unless_path_exists` blocks to guard one or more steps by a path, specifying the guard path's `base:` explicitly. Use `on_macos` and `on_linux` blocks for platform-specific steps. Each guard is evaluated once for its whole block. `copy`, `move` and symlink steps accept `source_glob: true`; path collections used by `remove` and `set_permissions` expand globs automatically. Removals may additionally be restricted with `symlink_target_contains:` or `content_contains:`.
 
 #### Default config and template steps
 
-`write` creates a default configuration or data file from literal content. It defaults to the same base as the other file preparation steps; pass `base:` (such as `base: :etc`) to target another formula path. By default `write` does not overwrite an existing file, so user edits are preserved across upgrades; pass `overwrite: true` to always replace the file.
+`write` creates a default configuration or data file from literal content. Specify its `base:`, such as `base: :etc`. By default `write` does not overwrite an existing file, so user edits are preserved across upgrades; pass `overwrite: true` to always replace the file.
 
 * `write`: write literal content to a file unless it already exists; example: `write "foo.conf", "key = value", base: :etc`.
-* `write` with `overwrite: true`: always replace the file; example: `write "foo/version", "1.0", overwrite: true`.
+* `write` with `overwrite: true`: always replace the file; example: `write "foo/version", "1.0", base: :var, overwrite: true`.
 
 A trailing newline is appended unless the content already ends with one, so written files end in a newline as POSIX expects.
 
@@ -1163,18 +1163,18 @@ Use the named actions below for formula families that share post-install algorit
 
 `init_data_dir` creates a database service data directory and runs a supported
 bootstrap command unless the directory already contains the default marker
-file. It defaults to paths relative to `var` and skips the bootstrap command in
-Homebrew's GitHub Actions jobs. It does not change permissions or ownership.
+file. Specify its `base:`, normally `base: :var`. It skips the bootstrap command
+in Homebrew's GitHub Actions jobs and does not change permissions or ownership.
 
 * `init_data_dir` with `using: :postgresql_initdb`: initialise PostgreSQL with
-  `initdb`; example: `init_data_dir "postgresql@16", using: :postgresql_initdb`.
+  `initdb`; example: `init_data_dir "postgresql@16", using: :postgresql_initdb, base: :var`.
   PostgreSQL defaults to `locale: "en_US.UTF-8"` and can set another locale,
-  for example `init_data_dir "postgresql@12", using: :postgresql_initdb, locale: "C"`.
+  for example `init_data_dir "postgresql@12", using: :postgresql_initdb, base: :var, locale: "C"`.
 * `init_data_dir` with `using: :mysql_initialize`: initialise MySQL with
   `mysqld --initialize-insecure`; example:
-  `init_data_dir "mysql", using: :mysql_initialize`.
+  `init_data_dir "mysql", using: :mysql_initialize, base: :var`.
 * `init_data_dir` with `using: :mariadb_install_db`: initialise MariaDB with
-  `mysql_install_db`; example: `init_data_dir "mysql", using: :mariadb_install_db`.
+  `mysql_install_db`; example: `init_data_dir "mysql", using: :mariadb_install_db, base: :var`.
 
 `link_dir` recursively links a source directory's contents into a target
 directory, preserving existing real directories and skipping `.DS_Store` files.

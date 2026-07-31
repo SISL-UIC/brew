@@ -16,9 +16,9 @@ or cask DSL.
 
 The initial step methods shadow common `FileUtils` naming where practical:
 `mkdir`/`mkdir_p`, `touch`, `move`/`mv`, `move_children` and
-`symlink`/`ln_s`/`ln_sf`. Formula steps default `mkdir` and `touch` paths to
-`var`, and source/target paths to `prefix`. Cask steps default `base`,
-`source_base` and `target_base` to `staged_path`.
+`symlink`/`ln_s`/`ln_sf`. Formula steps should specify `base: :var` for paths under
+`var`, while source/target paths default to `prefix`. Cask steps default
+`base`, `source_base` and `target_base` to `staged_path`.
 
 Formula `post_install_steps` may temporarily coexist with `post_install` so tap
 conversions can peel supported repeated statements out of larger hooks. Runtime
@@ -317,8 +317,10 @@ is stripped during metadata serialisation.
   `17` certificate/trust formulae may also
   move once their operations fit the supported step set. Runtime behaviour
   changes only for formulae that opt into `post_install_steps`.
-  Notes for implementation: default `mkdir`/`touch` to `var` and source/target
-  paths to `prefix`; expose the ordered array through `FormulaStruct`; make
+  Notes for implementation: formula definitions should specify `base: :var`
+  explicitly for `mkdir`/`touch` and other single-path steps, while
+  source/target paths default to `prefix`; expose the ordered array through
+  `FormulaStruct`; make
   `post_install_steps` run before any remaining `post_install`; document that
   the two forms may coexist only as an incremental conversion bridge. Keep the
   tap-wide autocorrect audit in a follow-up commit so the implementation can
@@ -503,3 +505,12 @@ is stripped during metadata serialisation.
   selected URL and checksum directly, while older API data still falls back to
   source. Artifact differences are included so all `27` current language casks,
   including `cave-story` and `wondershare-edrawmax`, can use API data.
+- [ ] PR 10, remove the documented formula `var` default while retaining it
+  temporarily as a runtime compatibility fallback.
+- [ ] PR 10.1, migrate every implicit `var` path in `homebrew/core` to an
+  explicit `base: :var`. `homebrew/cask` uses `staged_path` rather than `var`
+  as its install-step default and requires no matching migration.
+- [ ] PR 10.2, audit and autocorrect implicit formula `var` paths so new
+  official-tap uses cannot be introduced.
+- [ ] PR 10.3, remove the formula runtime compatibility fallback after the
+  official-tap migration and enforcement have landed.
