@@ -12,7 +12,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          touch "foo/state"
+          touch "foo/state", base: :var
         end
 
         def post_install; end
@@ -28,7 +28,64 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         def post_install; end
 
         post_install_steps do
-          touch "foo/state"
+          touch "foo/state", base: :var
+        end
+      end
+    RUBY
+  end
+
+  it "autocorrects implicit formula var paths" do
+    expect_offense(<<~RUBY)
+      class Foo < Formula
+        url "https://brew.sh/foo-1.0.tgz"
+
+        post_install_steps do
+          mkdir_p "log/foo"
+          ^^^^^^^^^^^^^^^^^ FormulaAudit/InstallSteps: Formula install-step paths must specify their base explicitly.
+          write "foo/state", "ready"
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^ FormulaAudit/InstallSteps: Formula install-step paths must specify their base explicitly.
+          init_data_dir "foo", using: :postgresql_initdb
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ FormulaAudit/InstallSteps: Formula install-step paths must specify their base explicitly.
+          if_path_exists "foo/state" do
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^ FormulaAudit/InstallSteps: Formula install-step paths must specify their base explicitly.
+            touch "foo/checked"
+            ^^^^^^^^^^^^^^^^^^^ FormulaAudit/InstallSteps: Formula install-step paths must specify their base explicitly.
+          end
+          run "foo", base: :bin, stdin_path: "foo/input"
+                                             ^^^^^^^^^^^ FormulaAudit/InstallSteps: Formula install-step paths must specify their base explicitly.
+        end
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      class Foo < Formula
+        url "https://brew.sh/foo-1.0.tgz"
+
+        post_install_steps do
+          mkdir_p "log/foo", base: :var
+          write "foo/state", "ready", base: :var
+          init_data_dir "foo", using: :postgresql_initdb, base: :var
+          if_path_exists "foo/state", base: :var do
+            touch "foo/checked", base: :var
+          end
+          run "foo", base: :bin, stdin_path: "{{var}}/foo/input"
+        end
+      end
+    RUBY
+  end
+
+  it "accepts formula paths with explicit bases or absolute tokens" do
+    expect_no_offenses(<<~RUBY)
+      class Foo < Formula
+        url "https://brew.sh/foo-1.0.tgz"
+
+        post_install_steps do
+          mkdir_p "log/foo", base: :var
+          touch "{{var}}/foo/state"
+          if_path_exists "/etc/foo.conf" do
+            write "foo.conf", "ready", base: :etc
+          end
+          run "foo", base: :bin, chdir: "{{libexec}}/foo"
         end
       end
     RUBY
@@ -53,17 +110,17 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          mkdir_p "foo"
-          touch "foo/state"
-          touch "foo/#{formula_name}"
+          mkdir_p "foo", base: :var
+          touch "foo/state", base: :var
+          touch "foo/#{formula_name}", base: :var
           mv "source", "target"
           move_children "source", "target"
           move_contents "source", "target"
-          inreplace "foo.conf", /@PREFIX@/, "{{HOMEBREW_PREFIX}}"
+          inreplace "foo.conf", /@PREFIX@/, "{{HOMEBREW_PREFIX}}", base: :var
           ln_sf "source", "target", source_base: :relative, uninstall: true
           write "foo.conf", "key = value\n", base: :etc
-          write "foo/adjacent", "first" "second"
-          set_permissions "foo", "0755"
+          write "foo/adjacent", "first" "second", base: :var
+          set_permissions "foo", "0755", base: :var
           run "foo", args: ["--repair"]
           terminate_process "foo", attempts: 3
           change_dylib_id "lib/libfoo.dylib", "{{opt_prefix}}/lib/libfoo.1.dylib", resolve_source: true
@@ -75,10 +132,10 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
           configure_php
           bootstrap_cpython
           bootstrap_pypy abi_version: "3.10"
-          write "foo/banner", <<~TEXT
+          write "foo/banner", <<~TEXT, base: :var
             literal banner
           TEXT
-          init_data_dir name, using: :postgresql_initdb
+          init_data_dir name, using: :postgresql_initdb, base: :var
           link_dir "source", "#{name}"
           link_children "source", suffix: "-#{version.major}"
           symlink_tree "source", "#{name}"
@@ -92,8 +149,8 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
           update_mime_database
           update_desktop_database
           on_macos do
-            if_path_exists "foo" do
-              touch "foo/scoped-state"
+            if_path_exists "foo", base: :var do
+              touch "foo/scoped-state", base: :var
             end
           end
           on_linux do
@@ -127,7 +184,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          write "foo.conf", "prefix = #{prefix}"
+          write "foo.conf", "prefix = #{prefix}", base: :var
                                       ^^^^^^^^^ FormulaAudit/InstallSteps: Steps blocks may only contain install step DSL calls: `mkdir`, `mkdir_p`, `touch`, `move`, `mv`, `move_children`, `move_contents`, `copy`, `remove`, `inreplace`, `symlink`, `ln_s`, `ln_sf`, `link_dir`, `link_children`, `symlink_tree`, `symlink_children`, `write`, `write_file`, `init_data_dir`, `compile_gsettings_schemas`, `gio_querymodules`, `gdk_pixbuf_query_loaders`, `update_gdk_pixbuf_loaders_cache`, `gtk_update_icon_cache`, `update_gtk_icon_cache`, `update_mime_database`, `update_desktop_database`, `set_permissions`, `run`, `terminate_process`, `warn`, `change_dylib_id`, `configure_gcc_runtime`, `install_gzipped_executable`, `configure_glibc_runtime`, `configure_clang_system`, `configure_php`, `bootstrap_cpython`, `bootstrap_pypy`, `if_path_exists`, `unless_path_exists`, `on_macos`, `on_linux`.
         end
       end
@@ -154,8 +211,8 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          mkdir_p "log/foo"
-          touch "foo/state"
+          mkdir_p "log/foo", base: :var
+          touch "foo/state", base: :var
           move "move-source", "move-target"
           symlink "move-target", "linked-target", source_base: :relative, overwrite: true
         end
@@ -184,7 +241,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
 
         post_install_steps do
           write_file "foo/foo.conf", "key = value\n", base: :etc
-          write_file "foo/banner", <<~TEXT
+          write_file "foo/banner", <<~TEXT, base: :var
             literal banner
           TEXT
         end
@@ -241,7 +298,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          touch "postgresql/state"
+          touch "postgresql/state", base: :var
         end
 
         def post_install
@@ -288,13 +345,13 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          touch "postgresql/state"
-          mkdir_p "log"
+          touch "postgresql/state", base: :var
+          mkdir_p "log", base: :var
           symlink_tree "include/postgresql", "include/{{formula_name}}"
           symlink_tree "lib/postgresql", "lib/{{formula_name}}"
           symlink_tree "share/postgresql", "share/{{formula_name}}"
           symlink_children "bin", suffix: "-{{version.major}}"
-          init_data_dir formula_name, using: :postgresql
+          init_data_dir formula_name, using: :postgresql, base: :var
         end
 
         def post_install
@@ -341,7 +398,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          init_data_dir "mysql", using: :mysql
+          init_data_dir "mysql", using: :mysql, base: :var
         end
 
         def post_install
@@ -381,7 +438,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          init_data_dir "mysql", using: :mariadb
+          init_data_dir "mysql", using: :mariadb, base: :var
         end
       end
     RUBY
@@ -451,7 +508,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         post_install_steps do
           link_dir "include/postgresql", "include/{{name}}"
           link_children "bin", suffix: "-{{version.major}}"
-          init_data_dir name, using: :postgresql_initdb
+          init_data_dir name, using: :postgresql_initdb, base: :var
           symlink "cert.pem", "cert.pem",
                   source_formula: "ca-certificates",
                   source_base:    :formula_pkgetc,
@@ -585,8 +642,8 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
 
         post_install_steps do
         ^^^^^^^^^^^^^^^^^^^^^ FormulaAudit/InstallSteps: `post_install_steps` only creates directories created by `brew services`.
-          mkdir_p "run/foo"
-          mkdir_p "log/foo"
+          mkdir_p "run/foo", base: :var
+          mkdir_p "log/foo", base: :var
         end
 
         service do
@@ -618,8 +675,8 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          mkdir_p "run/foo"
-          mkdir_p "state/foo"
+          mkdir_p "run/foo", base: :var
+          mkdir_p "state/foo", base: :var
         end
 
         service do
@@ -636,7 +693,7 @@ RSpec.describe RuboCop::Cop::FormulaAudit::InstallSteps do
         url "https://brew.sh/foo-1.0.tgz"
 
         post_install_steps do
-          mkdir_p "run"
+          mkdir_p "run", base: :var
         end
 
         service do
